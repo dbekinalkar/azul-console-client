@@ -1,6 +1,21 @@
 import argparse
 import asyncio
 import websockets
+from websockets.sync.client import connect, ClientConnection
+import threading
+
+def listen_server(ws: ClientConnection) -> None:
+    message: str
+    for message in ws:
+        print(f"Received from server: {message}")
+
+def send_messages(ws: ClientConnection) -> None:
+    while True:
+        message: str = input()
+        if message == "quit":
+            break
+        
+        ws.send(message)
 
 def parse_args() -> argparse.Namespace:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(description="Client to connect to Azul server.")
@@ -16,19 +31,16 @@ async def main() -> None:
 
     print(f'Connecting to {uri}')
 
-    ws: websockets.WebSocketClientProtocol
-    async with websockets.connect(uri) as ws:
-        while True:
-            message: str = input()
-            if message == "quit":
-                break
-                
-            await ws.send(message)
+    ws: ClientConnection
+    with connect(uri) as ws:
+        listener: threading.Thread = threading.Thread(target=listen_server, args=([ws]), name="Listener")
 
-            receipt: str = await ws.recv()
+        listener.start()
 
-            print(f"Received from server: {receipt}")
-            
+        send_messages(ws)
+        ws.close()
+
+        listener.join()
 
     print("Connection closed")
 
